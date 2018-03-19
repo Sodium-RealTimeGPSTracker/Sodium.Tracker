@@ -1,7 +1,7 @@
 # Sodium Tracker
 Le projet ci-présent vise le tracker GPS RaspberryPi.
 
-##Pour le compiler le projet
+## Pour le compiler le projet
 Nécessite cmake pour la génération des fichiers make
 
 `mkdir build`
@@ -10,11 +10,11 @@ Nécessite cmake pour la génération des fichiers make
 
 `cmake ..`
 
-##Pour l'exécuter
+## Pour l'exécuter
 `./Sodium.Tracker {adresse_serveur} < {fichier}`
 
 
-##Pour le tester
+## Pour le tester
 Il est possible de simuler le comportement du RaspberryPi et rouler le tout sur une même machine.
 - Il faut d'abord démarrer le serveur, **Sodium.WebApp**.
 - Ensuite, on peut démarrer le programme du tracker avec le fanion -t
