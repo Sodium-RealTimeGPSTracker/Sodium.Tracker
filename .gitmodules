@@ -1,0 +1,6 @@
+[submodule "minmea"]
+	path = minmea
+	url = https://github.com/kosma/minmea
+[submodule "easywsclient"]
+	path = easywsclient
+	url = https://github.com/dhbaird/easywsclient
