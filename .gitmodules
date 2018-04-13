@@ -4,3 +4,6 @@
 [submodule "easywsclient"]
 	path = easywsclient
 	url = https://github.com/dhbaird/easywsclient
+[submodule "MotionSensorExample"]
+	path = MotionSensorExample
+	url = https://github.com/rpicopter/MotionSensorExample

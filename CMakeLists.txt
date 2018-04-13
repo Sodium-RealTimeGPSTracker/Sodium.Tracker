@@ -8,5 +8,5 @@ set(SOURCE_FILES
         main.cpp
         minmea/minmea.c minmea/minmea.h
         easywsclient/easywsclient.cpp easywsclient/easywsclient.hpp
-        tracker.cpp tracker.h)
+        ServeurEnvoiWebsocket.cpp ServeurEnvoiWebsocket.h)
 add_executable(Sodium.Tracker ${SOURCE_FILES})
