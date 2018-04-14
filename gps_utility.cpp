@@ -5,9 +5,9 @@
 #include <string>
 #include <sstream>
 #include "minmea/minmea.h"
+#include "gps_utility.h"
 
 using namespace std;
-
 static const double PI = 3.14159265358979323846;
 
 double toRadians(double degree)
@@ -105,3 +105,4 @@ std::string to_json(minmea_sentence_rmc& rmc_sentence){
        "}";
     return os.str();
 }
+

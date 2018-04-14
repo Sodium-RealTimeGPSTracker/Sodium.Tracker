@@ -4,14 +4,15 @@
 
 #ifndef SODIUM_TRACKER_SERVEUR_ES_WEBSOCKET_H
 #define SODIUM_TRACKER_SERVEUR_ES_WEBSOCKET_H
+#include <thread>
 
 #include <list>
 #include <string>
-#include <thread>
 #include <vector>
 #include <array>
 #include <algorithm>
 #include <iterator>
+#include <atomic>
 
 #include "easywsclient/easywsclient.hpp"
 
@@ -24,10 +25,9 @@ private:
     static const auto tempsAttenteReconnexionParDefaut = 1000;
 
     atomic<bool> termine{false};
+    atomic<int> bufferAjout{0};
 
     array<list<string>, 2> buffers{};
-    int bufferEnvoi{0}, bufferAjout{1};
-    mutex mutexBufferSwap{};
 
     thread th;
 
@@ -50,6 +50,8 @@ private:
     void reconnecter();
     void connecter();
     void swapBuffers();
+    int getBufferEnvoi() const noexcept;
+    int getBufferAjout() const noexcept;
     void envoyer();
     void agir();
 };

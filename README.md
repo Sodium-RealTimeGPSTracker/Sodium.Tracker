@@ -1,7 +1,15 @@
 # Sodium Tracker
 Le projet ci-présent vise le tracker GPS RaspberryPi.
 
-## Pour le compiler le projet
+## Dépendances externes
+Le projet nécessite les librairies statiques I2Cdev et MotionSensor disponibles dans le projet-même. Il suffit des installer
+
+`make`
+
+`sudo install <lib> /usr/lib`
+
+
+## Générer le makefile
 Nécessite cmake pour la génération des fichiers make
 
 `mkdir build`
@@ -9,6 +17,9 @@ Nécessite cmake pour la génération des fichiers make
 `cd build`
 
 `cmake ..`
+
+## Pour compiler
+`make`
 
 ## Pour l'exécuter
 `./Sodium.Tracker {adresse_serveur} < {fichier}`
