@@ -16,17 +16,16 @@ void ServeurEnvoiWebSocket::arreter(){
 }
 
 void ServeurEnvoiWebSocket::ajouter(const string& message){
-    buffers[bufferAjout].push_back(message);
+    dbl_buffer.ajouter(message);
 }
 
 void ServeurEnvoiWebSocket::ajouter(string&& message){
-    buffers[bufferAjout].emplace_back(message);
+    dbl_buffer.ajouter(message);
 }
 
 template <class It>
 void ServeurEnvoiWebSocket::ajouter(const It debut, const It fin){
-    for(auto it = debut; it != fin; next(it))
-        buffers[bufferAjout].push_back(it);
+    dbl_buffer.ajouter(debut, fin);
 }
 
 ServeurEnvoiWebSocket::~ServeurEnvoiWebSocket(){
@@ -55,25 +54,15 @@ void ServeurEnvoiWebSocket::reconnecter(){
 }
 
 void ServeurEnvoiWebSocket::connecter(){
+    if(ws != nullptr)
+        ws->close();
     ws = WebSocket::from_url(adresseServeur);
 }
 
-int ServeurEnvoiWebSocket::getBufferEnvoi() const noexcept{
-    return bufferAjout == 0 ? 1 : 0;
-}
-
-int ServeurEnvoiWebSocket::getBufferAjout() const noexcept{
-    return bufferAjout;
-}
-
-void ServeurEnvoiWebSocket::swapBuffers(){
-    bufferAjout = bufferAjout == 1 ? 0 : 1;
-
-}
 
 void ServeurEnvoiWebSocket::envoyer(){
-    auto bufferEnvoi = getBufferEnvoi();
-    for(auto it = begin(buffers[bufferEnvoi]); it != end(buffers[bufferEnvoi]); it = next(it)){
+    auto donnees = dbl_buffer.extraire_tout();
+    for(auto it = begin(donnees); it != end(donnees); it = next(it)){
         if(estDeconnecte())
             reconnecter();
         ws->send(it->c_str());
@@ -84,9 +73,7 @@ void ServeurEnvoiWebSocket::envoyer(){
 void ServeurEnvoiWebSocket::agir(){
     connecter();
     while (!doitTerminer()) {
-        swapBuffers();
         envoyer();
-        buffers[getBufferEnvoi()].clear();
     }
     ws->close();
 }

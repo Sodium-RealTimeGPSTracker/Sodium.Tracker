@@ -10,7 +10,7 @@ set(SOURCE_FILES
         easywsclient/easywsclient.cpp easywsclient/easywsclient.hpp
         gps_utility.cpp gps_utility.h
         ServeurEnvoiWebsocket.cpp ServeurEnvoiWebsocket.h
-        )
+        ntuple_buffer.h AccelerometerDataEntry.h)
 
 add_executable(Sodium.Tracker ${SOURCE_FILES})
 target_link_libraries(Sodium.Tracker /usr/lib/libMotionSensor.a /usr/lib/libI2Cdev.a)

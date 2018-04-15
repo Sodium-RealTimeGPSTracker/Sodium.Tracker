@@ -15,6 +15,7 @@
 #include <atomic>
 
 #include "easywsclient/easywsclient.hpp"
+#include "ntuple_buffer.h"
 
 using easywsclient::WebSocket;
 using namespace std;
@@ -25,9 +26,7 @@ private:
     static const auto tempsAttenteReconnexionParDefaut = 1000;
 
     atomic<bool> termine{false};
-    atomic<int> bufferAjout{0};
-
-    array<list<string>, 2> buffers{};
+    double_buffer<string, 1000> dbl_buffer{};
 
     thread th;
 
@@ -49,9 +48,6 @@ private:
     bool estDeconnecte();
     void reconnecter();
     void connecter();
-    void swapBuffers();
-    int getBufferEnvoi() const noexcept;
-    int getBufferAjout() const noexcept;
     void envoyer();
     void agir();
 };
