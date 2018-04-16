@@ -4,14 +4,9 @@
 
 #ifndef SODIUM_TRACKER_SERVEUR_ES_WEBSOCKET_H
 #define SODIUM_TRACKER_SERVEUR_ES_WEBSOCKET_H
-#include <thread>
 
-#include <list>
+#include <mutex>
 #include <string>
-#include <vector>
-#include <array>
-#include <algorithm>
-#include <iterator>
 #include <atomic>
 
 #include "easywsclient/easywsclient.hpp"
@@ -23,17 +18,17 @@ using namespace std;
 class ServeurEnvoiWebSocket {
 private:
     const string adresseServeur;
-    static const auto tempsAttenteReconnexionParDefaut = 1000;
+    enum {tempsAttenteReconnexionParDefaut = 50 };
 
     atomic<bool> termine{false};
-    double_buffer<string, 1000> dbl_buffer{};
+    ntuple_buffer<string, 200, 1> buffer{}; // Moyenne crasse, mais fonctionne
 
     thread th;
-
+    mutex m;
     WebSocket::pointer ws;
 
 public:
-    ServeurEnvoiWebSocket(const string& adresseServeur);
+    explicit ServeurEnvoiWebSocket(const string& adresseServeur);
     ~ServeurEnvoiWebSocket();
 
     void arreter();

@@ -1,173 +1,187 @@
 #include <sstream>
 #include <iostream>
 #include <thread>
-
+#include <numeric>
+#include <fstream>
 #include "minmea/minmea.h"
-#include "ServeurEnvoiWebsocket.h"
+#include "serveur_envoi_websocket.h"
 #include "gps_utility.h"
-#include "MotionSensorExample/MotionSensor/inv_mpu_lib/inv_mpu_dmp_motion_driver.h"
-#include "MotionSensorExample/MotionSensor/inv_mpu_lib/inv_mpu.h"
-#include "ntuple_buffer.h"
-#include "AccelerometerDataEntry.h"
+#include "accelerometer_utility.h"
+#include "inv_mpu_dmp_motion_driver.h"
 
 using namespace std;
-atomic<bool> termine;
-static u_int16_t accelerometerPollingRate = 200; // 200 Hz
-static u_int16_t gpsPollingRate = 1; // 1 Hz
 
+static ServeurEnvoiWebSocket* serveurEnvoiWebSocket{};
+
+atomic<bool> termine{false};  // Signale la fin du programme, inutilisé pour l'instant
+
+// Fonctions d'acquisition des données
+using GPSDataEntry = minmea_sentence_rmc;
 template <int NBUF, int SZBUF>
-void handleGPS(istream& is, ntuple_buffer<minmea_sentence_rmc, NBUF, SZBUF>& buff){
+void handleGPS(istream& is, ntuple_buffer<GPSDataEntry, NBUF, SZBUF>& buff)
+{
     char line[MINMEA_MAX_LENGTH];
     while (!termine && is >> line){ // Bloquant
         minmea_sentence_rmc frame{};
         if(minmea_sentence_id(line, false) == MINMEA_SENTENCE_RMC){
             minmea_parse_rmc(&frame, line);
-            buff.ajouter(&frame, &frame + 1); // On sait que ça n'arrivera pas plus souvent que 1Hz
+            buff.ajouter(&frame, &frame + 1); // Raisonnable considérant un taux d'échantillonnage de 1Hz
         }
     }
-}
-
-class ErreurInitialisationSensor{};
-
-void handleTap(uint8_t orientation, uint8_t count){
-    cout << "Tap!" << endl;
-}
-
-void initAccelerometer(){
-    if (mpu_init(NULL) != 0) {
-        cerr << "MPU init failed!" << endl;
-        throw ErreurInitialisationSensor();
-    }
-
-    cout << "Setting MPU sensors..." << endl;
-    if (mpu_set_sensors(INV_XYZ_GYRO|INV_XYZ_ACCEL)!=0) {
-        cerr << "Failed to set sensors!" << endl;
-        throw ErreurInitialisationSensor();
-    }
-
-    cout << "Setting GYRO sensitivity..." << endl;
-    if (mpu_set_gyro_fsr(2000)!=0) {
-        cerr << "Failed to set gyro sensitivity!" << endl;
-        throw ErreurInitialisationSensor();
-    }
-
-    cout << "Setting ACCEL sensitivity..." << endl;
-    if (mpu_set_accel_fsr(2)!=0) {
-        cerr << "Failed to set accel sensitivity!" << endl;
-        throw ErreurInitialisationSensor();
-    }
-
-    // verify connection
-    cout << "Powering up MPU..." << endl;
-    uint8_t devStatus;
-    mpu_get_power_state(&devStatus);
-    if(devStatus){
-        cout << "MPU6050 connection successful " << endl;
-    }else{
-        cout << "MPU6050 connection failed " << devStatus << endl;
-        throw ErreurInitialisationSensor();
-    }
-
-    //fifo config
-    cout << "Setting MPU fifo..." << endl;
-    if (mpu_configure_fifo(INV_XYZ_ACCEL)!=0) {
-        cerr << "Failed to initialize MPU fifo!" << endl;
-        throw ErreurInitialisationSensor();
-    }
-
-    // load and configure the DMP
-    cout << "Loading DMP firmware..." << endl;
-    if (dmp_load_motion_driver_firmware()!=0) {
-        cerr << "Failed to enable DMP!" << endl;
-        throw ErreurInitialisationSensor();
-    }
-
-    cout << "Activating DMP..." << endl;
-    if (mpu_set_dmp_state(1)!=0) {
-        cerr << "Failed to enable DMP!" << endl;
-        throw ErreurInitialisationSensor();
-    }
-
-    cout << "Configuring DMP..." << endl;
-    if (dmp_enable_feature(DMP_FEATURE_TAP|DMP_FEATURE_PEDOMETER)!=0) {
-        throw ErreurInitialisationSensor();
-    }
-
-    cout << "Setting polling rate..." << endl;
-    if (dmp_set_fifo_rate(accelerometerPollingRate)!=0) {
-        throw ErreurInitialisationSensor();
-    }
-    cout << "Setting polling rate..." << endl;
-    if (mpu_reset_fifo()!=0) {
-        throw ErreurInitialisationSensor();
-    }
-
-    cout << "Setting tap callback.." << endl;
-    if(dmp_register_tap_cb(handleTap)!=0){
-        throw ErreurInitialisationSensor();
-    };
-
-    AccelerometerDataEntry e{};
-    uint8_t r;
-    do {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000/accelerometerPollingRate));
-            r=dmp_read_fifo(e.g,e.a,e._q,&(e.sensors),&(e.fifoCount));
-    } while (r!=0 || e.fifoCount<5); //packtets!!!//
-    //ms_open();
 }
 
 template <int NBUF, int SZBUF>
-void handleAccelerometer(ntuple_buffer<AccelerometerDataEntry, NBUF, SZBUF>& buff){
+void handleAccelerometer(ntuple_buffer<AccelerometerDataEntry, NBUF, SZBUF>& buff, uint16_t accelerometerSens)
+{
     while (!termine){
-        AccelerometerDataEntry e{};
         this_thread::sleep_for(chrono::milliseconds(1000/accelerometerPollingRate));
-        while(dmp_read_fifo(e.g,e.a,e._q,&(e.sensors),&(e.fifoCount))!=0);
-        dmp_get_pedometer_step_count(&(e.stepCount));
-        buff.ajouter(&e, &e + 1);
+        int16_t a[3], g[3], sensors;
+        int32_t q[4];
+        uint32_t stepCount;
+        uint8_t fifoCount;
+
+        // Lecture jusqu'à ce que le tampon du capteur contiennent au moins 1 élément
+        while(dmp_read_fifo(g,a,q,&sensors,&fifoCount) != 0);
+        vector<AccelerometerDataEntry> data(fifoCount);
+        data.emplace_back(a, stepCount, accelerometerSens, accelerometerOffset);
+
+        for(int i = 0; i<fifoCount; ++i){
+            dmp_read_fifo(g,a,q,&sensors,&fifoCount);
+            data.emplace_back(a, stepCount, accelerometerSens, accelerometerOffset);
+            dmp_get_pedometer_step_count(&stepCount);
+        }
+
+        buff.ajouter(data);
     }
 }
 
-int main (int argc, const char * argv[]) {
-    auto adresseServeur = argc > 1 ? argv[1] : "ws://localhost:8080";
-    auto testMode = argc > 2 && "-t" == argv[2];
-    ntuple_buffer<minmea_sentence_rmc, 2, 2> gpsDataBuf{};
-    ntuple_buffer<AccelerometerDataEntry, 2, 1000> accelerometerDataBuf{};
+// Fonctions d'analyse des données
 
-    initAccelerometer();
-    atomic<bool> moving{false};
-    thread gpsSensorAcquisitionThread(handleGPS<2, 2>, std::ref(cin), std::ref(gpsDataBuf));
-    thread accelSensorAcquisitionThread(handleAccelerometer<2, 1000>, std::ref(accelerometerDataBuf));
+// Quelques atomiques pour communiquer entre les threads d'analyse...
+atomic<bool> started{false};        // Début de l'activité
+atomic<bool> accelerating{false};   // Filtrage du mouvement
+atomic<int> step_count{0};          // Nombre de pas
 
-    thread accelDataHandlingThread([&]{
-        int prevStepCount{0};
-        while(!termine) {
-            auto donnees = accelerometerDataBuf.extraire_tout();
-            if (!donnees.empty()) {
-                auto stepCount = rbegin(donnees)->stepCount;
-                if (stepCount > prevStepCount) {
-                    moving = true;
-                    cout << "moving" << endl;
-                    prevStepCount = stepCount;
+void handleTap(uint8_t, uint8_t count)
+{
+    if(count == 1){
+        static auto lastCheckpoint = high_resolution_clock::now();
+        auto now = high_resolution_clock::now();
+        if(started == false){
+            serveurEnvoiWebSocket->ajouter("{\"chk\":0}");
+            started = true;
+        }else{
+            auto diff = duration_cast<milliseconds>(now - lastCheckpoint).count();
+            serveurEnvoiWebSocket->ajouter("{\"chk\":" + to_string(diff) + ",\"cnt\":"+to_string(count) + "}");
+        }
+        lastCheckpoint = now;
+    }
+}
+
+template <int NBUF, int SZBUF>
+void handleAccelerometerData(ntuple_buffer<AccelerometerDataEntry, NBUF, SZBUF>& buff)
+{
+    static const double movementAccelThreshold{0.6f}; // Seuil où on considère que l'utilisateur est en mouvement
+    while(!termine) {
+        auto donnees = buff.extraire();
+
+        if (started && !donnees.empty()) {
+            auto derniereDonnee = *rbegin(donnees);
+            auto beginIt = begin(donnees);
+            auto endIt = end(donnees);
+
+            // Filtrage du bruit...
+            sort(begin(donnees), end(donnees), [](AccelerometerDataEntry &val1, AccelerometerDataEntry& val2){
+                return val1.getAverageAccel() < val2.getAverageAccel();
+            });
+            advance(beginIt, (int)(0.2 * donnees.size()));
+            advance(endIt, (int)(-0.2 * donnees.size()));
+            if(beginIt != endIt){
+                double avgAccel = accumulate(beginIt,endIt,double{0},
+                                             [](long double cumul, AccelerometerDataEntry& data){
+                                                 return cumul + data.getAverageAccel();
+                                             });
+            //...
+
+                avgAccel = avgAccel / (int)distance(beginIt, endIt);
+                if (derniereDonnee.stepCount > step_count || avgAccel > movementAccelThreshold) {
+                    accelerating = true;
+                    step_count = derniereDonnee.stepCount;
                 }
             }
         }
-    });
+    }
+}
 
-    static ServeurEnvoiWebSocket ws(adresseServeur);
-
-    thread gpsDataHandlingThread([&]{
-        while(!termine){
-            auto donnees = gpsDataBuf.extraire_tout();
-            if(moving && !donnees.empty()){
-                cout << "sent position!" << endl;
-                ws.ajouter(to_json(*rbegin(donnees)));
-                moving = false;
+template <int NBUF, int SZBUF>
+void handleGpsData(ntuple_buffer<GPSDataEntry, NBUF, SZBUF>& buff)
+{
+    double avgSpeed{0};
+    int sampleCount{0};
+    while(!termine){
+        auto donnees = buff.extraire();
+        if(started && !donnees.empty()){
+            for(auto it = begin(donnees); it != end(donnees); ++it){
+                auto donnee = *it;
+                double speed = minmea_tofloat(&donnee.speed)* 1.852; // Noeuds -> km/h
+                sampleCount += 1;
+                avgSpeed = avgSpeed + (speed - avgSpeed)/sampleCount; // Moyenne mobile cumulative
+                if(speed > 3.f || accelerating) {
+                    serveurEnvoiWebSocket->ajouter(to_json(donnee, avgSpeed, step_count));
+                    accelerating = false;
+                }
             }
         }
-    });
+    }
+};
+
+int main (int argc, const char * argv[])
+{
+    if(argc < 2){
+        cout <<"Veuillez entrer l'adresse du serveur websocket..." << endl;
+        return -1;
+    }
+    auto adresseServeur = argv[1];
+    enum {
+        accelDataAnalysisSampleSize = 10,
+        accelDataBufferCount = 10,
+        gpsDataAnalysisSampleSize = 1,
+        gpsDataBufferCount = 10
+    };
+
+    serveurEnvoiWebSocket = new ServeurEnvoiWebSocket(adresseServeur);
+    auto accelSens = initAccelerometer(handleTap);
+
+    ntuple_buffer<GPSDataEntry,
+        gpsDataBufferCount,
+        gpsDataAnalysisSampleSize> gpsDataBuf{};
+
+    ntuple_buffer<
+        AccelerometerDataEntry,
+        accelDataBufferCount,
+        accelDataAnalysisSampleSize> accelerometerDataBuf{};
+
+    thread accelSensorAcquisitionThread(
+            handleAccelerometer<accelDataBufferCount,accelDataAnalysisSampleSize>,
+            std::ref(accelerometerDataBuf),
+            accelSens);
+
+    thread gpsSensorAcquisitionThread(
+        handleGPS<gpsDataBufferCount, gpsDataAnalysisSampleSize>,
+        std::ref(cin),
+        std::ref(gpsDataBuf));
+
+    thread accelDataHandlingThread(
+        handleAccelerometerData<accelDataBufferCount,accelDataAnalysisSampleSize>,
+        std::ref(accelerometerDataBuf));
+
+    thread gpsDataHandlingThread(
+        handleGpsData<gpsDataBufferCount, gpsDataAnalysisSampleSize>,
+        std::ref(gpsDataBuf));
 
     gpsSensorAcquisitionThread.join();
     gpsDataHandlingThread.join();
     accelSensorAcquisitionThread.join();
     accelDataHandlingThread.join();
+    delete serveurEnvoiWebSocket;
 }

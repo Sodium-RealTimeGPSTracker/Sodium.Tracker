@@ -8,9 +8,9 @@ set(SOURCE_FILES
         main.cpp
         minmea/minmea.c minmea/minmea.h
         easywsclient/easywsclient.cpp easywsclient/easywsclient.hpp
-        gps_utility.cpp gps_utility.h
-        ServeurEnvoiWebsocket.cpp ServeurEnvoiWebsocket.h
-        ntuple_buffer.h AccelerometerDataEntry.h)
+        gps_utility.h
+        serveur_envoi_websocket.cpp serveur_envoi_websocket.h
+        ntuple_buffer.h accelerometer_utility.cpp accelerometer_utility.h)
 
 add_executable(Sodium.Tracker ${SOURCE_FILES})
 target_link_libraries(Sodium.Tracker /usr/lib/libMotionSensor.a /usr/lib/libI2Cdev.a)
