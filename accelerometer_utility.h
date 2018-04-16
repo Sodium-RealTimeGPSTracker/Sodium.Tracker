@@ -13,7 +13,6 @@
 using namespace std;
 
 static u_int16_t accelerometerPollingRate = 200; // 200 Hz
-static int16_t accelerometerOffset[3];
 
 struct AccelerometerDataEntry {
 public:
@@ -24,12 +23,7 @@ private:
 public:
     AccelerometerDataEntry() = default;
     AccelerometerDataEntry(const AccelerometerDataEntry& autre) = default;
-
-    AccelerometerDataEntry(const int16_t a[3], uint32_t stepCount, uint16_t sens, const int16_t offset[3]) :
-            accel{(float)(a[0]-offset[0]) / sens, (float)(a[1]-offset[1])  / sens, (float)(a[2]-offset[2])  / sens},
-            stepCount(stepCount)
-    {
-    }
+    AccelerometerDataEntry(const int16_t a[3], uint32_t stepCount, uint16_t sens);
 
     double getAverageAccel();
     string to_string();

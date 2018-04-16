@@ -11,6 +11,16 @@
 #include "inv_mpu_dmp_motion_driver.h"
 #include "inv_mpu.h"
 
+static int16_t accelerometerOffset[3];
+
+
+AccelerometerDataEntry::AccelerometerDataEntry(const int16_t a[3], uint32_t stepCount, uint16_t sens) :
+        accel{(float)(a[0]-accelerometerOffset[0]) / sens, (float)(a[1]-accelerometerOffset[1])  / sens, (float)(a[2]-accelerometerOffset[2])  / sens},
+        stepCount(stepCount)
+{
+}
+
+
 double AccelerometerDataEntry::getAverageAccel()
 {
     if(avgAccel == -1)
